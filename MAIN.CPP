@@ -70,8 +70,6 @@
 #include <time.h>
 #endif // __DJGPP__
 
-#define SONGNAME "5BK-OPL.SA2"
-
 #define UNUSED(__p__) (void)(__p__)
 
 unsigned char register_bypass[246] = {0};
@@ -1059,10 +1057,12 @@ void bpmWait(unsigned long int delays) {
 #endif // __DJGPP__
 
 int main(int argc, const char *argv[]) {
-  UNUSED(argc);
-  UNUSED(argv);   
+  if (argc != 2) {
+    printf("Please supply a <filename.sa2> to be replayed.\n");
+    exit(0);
+  }
 
-  FILE *in = fopen(SONGNAME,"rb");
+  FILE *in = fopen(argv[1],"rb");
   fseek(in,0,SEEK_END);
   int fileSize = ftell(in);
   fseek(in,0,SEEK_SET);
