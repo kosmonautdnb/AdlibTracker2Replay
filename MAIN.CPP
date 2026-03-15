@@ -753,7 +753,7 @@ void effect_vibrato_volume_slide(unsigned int bp, unsigned int ax) {
 }
 
 void effect_set_volume(unsigned int bp, unsigned int ax) {
-  int ah = ax >> 8;
+  unsigned int ah = ax >> 8;
   if (ah>63) ah = 63;
   ah = 63-ah;
   set_volume(bp, ah<<8);
@@ -1027,7 +1027,7 @@ unsigned long int delayCount(double bpm) {
   //1min warten = ret * 60 = bpm * 16ticks
   //ret * 60 / bpm = 16ticks
   //ret * 60 / bpm / 16 = 1tick
-  return ports*60.0/bpm/16.0;
+  return ports*60.0/bpm/(4.0*6.0);
 }
 void bpmWait(unsigned long int delays) {
   ports = 0;
@@ -1048,7 +1048,7 @@ void bpmWait(unsigned long int delays) {
   //1min warten = bpm * 16 ticks
   //60 sekunden warten = bpm * 16 ticks
   //60 / (bpm*16) = 1 tick
-  double w = 60.0/(waitBpm*16.0);
+  double w = 60.0/(waitBpm*(4.0*6.0));
   while((double)((double)uclock() - startClock) / UCLOCKS_PER_SEC < w) {
     inp(0x80);
   }
