@@ -33,6 +33,7 @@
 //------
 // The timing is not 100% right on WatcomC, if I reprogram the timer interrupt speed, the hardrive alerts some errors in Windows..
 // So better don't modify the Timer IRQ speed.
+// The timing is very wrong on watcomC, sadly..
 //------
 // From the Surprise Adlib Tracker 2.0 Author
 // Welcome to the SADT V2.0 Editor / Player for Adlib!
@@ -72,7 +73,8 @@
 
 #define UNUSED(__p__) (void)(__p__)
 
-unsigned char register_bypass[246] = {0};
+#define REGB register_bypass2
+unsigned char register_bypass2[246] = {0};
 unsigned char register_map[9] = {0,1,2,8,9,10,16,17,18};
 unsigned short InsTab[32] = {0};
 
@@ -157,12 +159,12 @@ unsigned char s_count[9] = {0};
 unsigned char new_position[9] = {0};
 
 void waitlong() {
-  for (int i = 0; i < 35; i++) inp(0x80);
+  for (int i = 0; i < 35; i++) inp(0x388);
 }
 
 void WriteThrough(unsigned int ax, unsigned int bx) {
   if (bx >= 246) exit(0);
-  register_bypass[bx] = (unsigned char)(ax>>8);
+  REGB[bx] = (unsigned char)(ax>>8);
   outp(0x388,bx & 255);
   waitlong();
   outp(0x389,ax >> 8);
@@ -170,8 +172,8 @@ void WriteThrough(unsigned int ax, unsigned int bx) {
 
 void fastwrite(unsigned int ax, unsigned int bx) {
   if (bx >= 246) exit(0);
-  if (register_bypass[bx] == (ax>>8)) return;
-  register_bypass[bx] = (unsigned char)(ax>>8);
+  if (REGB[bx] == (ax>>8)) return;
+  REGB[bx] = (unsigned char)(ax>>8);
   outp(0x388,bx & 255);
   waitlong();
   outp(0x389,ax >> 8);
@@ -186,7 +188,7 @@ void Adwrite(unsigned int r, unsigned int w) {
 void DefineBoth(unsigned char *ds, unsigned int &si, unsigned int bx, unsigned int cl) {
   bx += cl;
   unsigned short ax = *((unsigned short*)&ds[si]); si += 2;
-  int ch = ax>>8;
+  unsigned int ch = ax>>8;
   ax = (unsigned short)((ax & 0x00ff)|((ax<<8)&0xff00));
   fastwrite(ax,bx); // Connector
   bx += 3;
@@ -263,7 +265,7 @@ void mute_voice(int i) {
   fastwrite(ax,bx);
   bx = (bx & 0xff00)|cl;
   bx += 0x40;
-  ax = (ax & 0x00ff)|(register_bypass[bx]<<8);
+  ax = (ax & 0x00ff)|(REGB[bx]<<8);
   ax |= 0x3f00;
   fastwrite(ax,bx);
   ax = ax & 0x00ff;
@@ -387,14 +389,14 @@ bool set_main_volume(unsigned char bl) {
   mainvol = bl;
   for (int si = 0; si < 9; si++) {
     if (channel_active[si]!=0) {
-      int al = channel_vol2[si];
-      int bx = register_map[si] + 0x40;
-      int ax = (calcvol(al)<<8)+(register_bypass[bx]&0xc0);
+      unsigned int al = channel_vol2[si];
+      unsigned int bx = register_map[si] + 0x40;
+      unsigned int ax = (calcvol(al)<<8)+(REGB[bx]&0xc0);
       ax |= (ax&255)<<8;
       fastwrite(ax,bx);
       bx += 3;
       al = channel_vol[si];
-      ax = (calcvol(al)<<8)+(register_bypass[bx]&0xc0);
+      ax = (calcvol(al)<<8)+(REGB[bx]&0xc0);
       ax |= (ax&255)<<8;
       fastwrite(ax,bx);
     }
@@ -434,7 +436,7 @@ void set_freq(unsigned int bp, unsigned int cx) {
   unsigned int bx = bp + 0xa0;
   fastwrite((cx<<8) & 0xff00,bx);
   bx += 0x10;
-  unsigned int ah = register_bypass[bx];
+  unsigned int ah = REGB[bx];
   ah &= 32;
   cx &= 0x1f00;
   ah |= cx>>8;
@@ -508,7 +510,7 @@ void frequenz_up2(unsigned int bp, unsigned int ax) {
   int bx = bp + 0xa0;
   fastwrite((cx & 255)<<8,bx);
   bx += 0x10;
-  unsigned int ah = register_bypass[bx];
+  unsigned int ah = REGB[bx];
   ah &= 32;
   unsigned int ch = (cx>>8) & 31;
   ah |= ch;
@@ -521,7 +523,7 @@ void frequenz_down2(unsigned int bp, unsigned int ax) {
   int bx = bp + 0xa0;
   fastwrite((cx & 255)<<8,bx);
   bx += 0x10;
-  unsigned int ah = register_bypass[bx];
+  unsigned int ah = REGB[bx];
   ah &= 32;
   unsigned int ch = (cx>>8) & 31;
   ah |= ch;
@@ -576,7 +578,7 @@ void shift_helper(unsigned int bp, unsigned int ax, unsigned int cx) {
   bx += 0xa0;
   fastwrite((cx&255)<<8,bx);
   bx += 0x10;
-  unsigned int al = register_bypass[bx];
+  unsigned int al = REGB[bx];
   al &= 32;
   unsigned int ah = (cx>>8) & 255;
   ah &= _B8(1,1,0,1,1,1,1,1);
@@ -613,9 +615,9 @@ void effect_slide_down(unsigned int bp, unsigned int ax) {
 void execute_portamento(unsigned int bp) {
   unsigned int bx = bp;
   bx += 0xa0;
-  unsigned int al = register_bypass[bx];
+  unsigned int al = REGB[bx];
   bx += 0x10;
-  unsigned int ah = register_bypass[bx];
+  unsigned int ah = REGB[bx];
   bx = bp;
   unsigned int dx = channel_pdest[bx];
   unsigned int cx = channel_pspeed[bx];
@@ -626,9 +628,9 @@ void execute_portamento(unsigned int bp) {
       ax = cx;
       unsigned int p = dx;
       bx += 0xb0;
-      unsigned int ch = register_bypass[bx];
+      unsigned int ch = REGB[bx];
       bx -= 0x10;
-      unsigned int cl = register_bypass[bx];
+      unsigned int cl = REGB[bx];
       cx = calc_freq_down(cl|(ch<<8),ax);
       dx = p;
       bx = cx;
@@ -650,9 +652,9 @@ void execute_portamento(unsigned int bp) {
       ax = cx;
       unsigned int p = dx;
       bx += 0xb0;
-      unsigned int ch = register_bypass[bx];
+      unsigned int ch = REGB[bx];
       bx -= 0x10;
-      unsigned int cl = register_bypass[bx];
+      unsigned int cl = REGB[bx];
       cx = calc_freq_up(cl|(ch<<8),ax);
       dx = p;
       bx = cx;
@@ -699,14 +701,14 @@ void set_volume(unsigned int bx, unsigned int ax) {
   unsigned int al = (cx>>8);
   al &= 63;
   channel_vol2[di] = (unsigned char)al;
-  ax = (calcvol(al)<<8) | (register_bypass[bx] & 0xc0);
+  ax = (calcvol(al)<<8) | (REGB[bx] & 0xc0);
   ax |= (ax & 255)<<8;
   fastwrite(ax,bx);
   bx += 3;
   al = cx & 255;
   al &= 63;
   channel_vol[di] = (unsigned char)al;
-  ax = (calcvol(al)<<8) | (register_bypass[bx] & 0xc0);
+  ax = (calcvol(al)<<8) | (REGB[bx] & 0xc0);
   ax |= (ax & 255)<<8;
   fastwrite(ax,bx);
 }
@@ -786,13 +788,14 @@ void effect_pattern_break(unsigned int bp, unsigned int ax) {
   channel_eff[bp] = 0;
 }
 
-void release_note(unsigned int &bx) {
+unsigned int release_note(unsigned int bx) {
   bx += 0xb0;
-  unsigned int ah = register_bypass[bx];
+  unsigned int ah = REGB[bx];
   if ((ah & 32)!=0) {
     ah &= 255-32;
     WriteThrough(ah<<8,bx);
   }
+  return bx;
 }
 
 void effect_release_note(unsigned int bp, unsigned int ax) {
@@ -882,18 +885,18 @@ void init_instrument2(unsigned char *ds,unsigned int bp, unsigned int ch) {
   
   bx = 0x20;
   DefineBoth(ds,si,bx,cl);
-  
+
   bx = 0x60;
   DefineBoth(ds,si,bx,cl);
-  
+
   bx = 0x80;
   DefineBoth(ds,si,bx,cl);
-  
+
   bx = 0xe0;
   DefineBoth(ds,si,bx,cl);
-  
+
   bx = 0x40 + cl;
-  
+
   unsigned int cx = *((unsigned short*)&ds[si]); si+=2;
   
   unsigned int ax = channel_vol2[bp]|(channel_vol[bp]<<8);
@@ -916,16 +919,17 @@ void init_instrument2(unsigned char *ds,unsigned int bp, unsigned int ch) {
 }
 
 void play_note2(unsigned int bp, unsigned int cx) {
-  release_note(bp);
+  unsigned int bx = release_note(bp);
+  if ((cx & 255) >= sizeof(NoteTab)/2) exit(0);
   cx = NoteTab[cx & 255];
-  fastwrite((cx&0x00ff)<<8,bp-0x10);
-  WriteThrough(cx&0xff00,bp);
+  if (bx < 0x10) exit(0);
+  fastwrite((cx&0x00ff)<<8,bx-0x10);
+  WriteThrough(cx&0xff00,bx);
   channel_freq[bp] = (unsigned short)cx;
   channel_fshift[bp] = 0;
 }
 
 void play_line() {
-
   for (int bp = 0; bp < 9; bp++) {
     if (channel_active[bp] == 1) {
       unsigned int bl = channel_segment[bp];
@@ -1063,6 +1067,10 @@ int main(int argc, const char *argv[]) {
   }
 
   FILE *in = fopen(argv[1],"rb");
+  if (in == NULL) {
+    printf("File not found:<%s>\n",argv[1]);
+    exit(0);
+  }
   fseek(in,0,SEEK_END);
   int fileSize = ftell(in);
   fseek(in,0,SEEK_SET);
