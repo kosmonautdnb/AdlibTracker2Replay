@@ -1160,23 +1160,49 @@ void bpmWait(unsigned long int delays) {
 }
 #endif // __DJGPP__
 
-int main(int argc, const char *argv[]) {
-  if (argc != 2) {
-    printf("Please supply a <filename.sa2> to be replayed.\n");
-    exit(0);
-  }
-
-  FILE *in = fopen(argv[1],"rb");
-  if (in == NULL) {
-    printf("File not found:<%s>\n",argv[1]);
-    exit(0);
-  }
+unsigned char *getSongFromExe(const char *fileName) {
+  unsigned char *ret = NULL;
+  FILE *in = fopen(fileName,"rb");
+  if (in == NULL) return ret;
   fseek(in,0,SEEK_END);
-  int fileSize = ftell(in);
-  fseek(in,0,SEEK_SET);
-  unsigned char *data = (unsigned char*)malloc(fileSize);
-  fread(data,1,fileSize,in);
+  long int fileSize = ftell(in);
+  fseek(in,fileSize-4,SEEK_SET);
+  unsigned long int id;
+  fread(&id,1,4,in);
+  if ((id & 255)=='P'&&((id>>8) & 255)=='L'&&((id>>16) & 255)=='S'&&((id>>24) & 255)=='4') {
+    fseek(in,fileSize-8,SEEK_SET);
+    long int dataSize;
+    fread(&dataSize,1,4,in);
+    ret = (unsigned char*)malloc(dataSize);
+    fseek(in,fileSize-8-dataSize,SEEK_SET);
+    fread(ret,1,dataSize,in);
+  }
   fclose(in);
+  return ret;
+}
+
+int main(int argc, const char *argv[]) {
+
+  unsigned char *data = getSongFromExe(argv[0]);
+
+  if (data == NULL) {
+    if (argc != 2) {
+      printf("Please supply a <filename.sa2> to be replayed.\n");
+      exit(0);
+    }
+  
+    FILE *in = fopen(argv[1],"rb");
+    if (in == NULL) {
+      printf("File not found:<%s>\n",argv[1]);
+      exit(0);
+    }
+    fseek(in,0,SEEK_END);
+    long int fileSize = ftell(in);
+    fseek(in,0,SEEK_SET);
+    data = (unsigned char*)malloc(fileSize);
+    fread(data,1,fileSize,in);
+    fclose(in);
+  }
 
   prepare_song(data);
   unsigned long int delays = delayCount(current_bpm);
