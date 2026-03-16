@@ -758,7 +758,7 @@ void effect_set_volume(unsigned int bp, unsigned int ax) {
   unsigned int ah = ax >> 8;
   if (ah>63) ah = 63;
   ah = 63-ah;
-  set_volume(bp, ah<<8);
+  set_volume(bp, ah|(ah<<8));
 }
 
 void effect_position_jump(unsigned int bp, unsigned int ax) {
@@ -929,7 +929,102 @@ void play_note2(unsigned int bp, unsigned int cx) {
   channel_fshift[bp] = 0;
 }
 
+unsigned int retrig_note(unsigned int bx) {
+  unsigned int bp = bx;
+  bx += 0xb0;
+  unsigned int ah = REGB[bx];
+  if ((ah & 32) == 0) {
+    ah |= 32;
+    WriteThrough(ah<<8,bx);
+    return bx;
+  }
+  release_note(bp);
+  retrig_note(bp);
+  return bx;
+}
+
+void select_wave(unsigned int bx, unsigned int cx) {
+  unsigned int bl = register_map[bx];
+  unsigned int bh = 0;
+  bx = bl|(bh<<8);
+  bx += 0xe0;
+  unsigned int ah = cx & 255;
+  if (ah >= 1) {
+    ah--;
+    fastwrite(ah<<8,bx);
+  }
+  bx += 3;
+  ah = cx >> 8;
+  if (ah >= 1) {
+    ah--;
+    fastwrite(ah<<8,bx);
+  }
+}
+
+
+void spec_arpeggio(unsigned char *ds, unsigned int bp) {
+  // not tested
+  if (channel_acurpos[bp] == 0) return;
+  channel_acursp[bp]--;
+  if (channel_acursp[bp] > 0) return;
+  unsigned int al = channel_acurpos[bp];
+  unsigned int ah = 0;
+  unsigned int di = al | (ah<<8);
+  al = ds[_acommands+di];
+  if (al<254) {
+    if (al==255) {
+      channel_acurpos[bp] = 0;
+      return;
+    }
+    al = ds[_arpeggio+di];
+    di = al|(ah<<8);
+    channel_acurpos[bp] = (unsigned char)al;
+    al = ds[_acommands+di];
+    if (al != 0) {
+      if (al <= 44) {
+        ah = 0;
+        unsigned int cx = (al/10)<<8;
+        select_wave(bp,cx);
+      } else {
+        if (al == 253) {
+          release_note(bp);
+        }
+        if (al == 252) {
+          effect_set_volume(bp,ds[_arpeggio+di]<<8);
+        }        
+        if (al == 251) {
+          ah = ds[_arpeggio+di];
+          effect_set_volume(bp,ah<<8);
+          retrig_note(bp);
+          al = channel_aspeed[bp]; // no_half
+          channel_acursp[bp] = (unsigned char)al;
+          channel_acurpos[bp]++;
+          return;
+        }
+      }
+    }
+  }
+
+  al = ds[_arpeggio+di];
+  if (al <= 100) {
+    ah = channel_note[bp];
+    al += ah;
+  } else {
+    al -= 99;
+  }
+  if (al>96) al = 96;
+  ah = 0;
+  channel_note2[bp] = (unsigned char)al;
+  unsigned int cx = NoteTab[al];
+  unsigned int ax = channel_fshift[bp];
+  shift_helper(bp,ax,cx);
+  al = channel_aspeed[bp]; // no_half
+  channel_acursp[bp] = (unsigned char)al;
+  channel_acurpos[bp]++;
+}
+
 void play_line() {
+
   for (int bp = 0; bp < 9; bp++) {
     if (channel_active[bp] == 1) {
       unsigned int bl = channel_segment[bp];
@@ -937,11 +1032,15 @@ void play_line() {
       unsigned int al = s_count[bl];
       count = (unsigned char)al;
       unsigned char *ds = segments[bl];
-      if (al == 0) {
+      if (al != 0) {
+        spec_arpeggio(ds,bp);
+        play_line_effects(bp);
+      } else {
         al = current_line[bl];
         unsigned int si = al * 3;
         al = ds[work_pattern[bl]+bp];
-        if (al != 0) {
+        if (al == 0) {
+        } else {
           al--;
           si += al * 192 + _trackdata;
           if (count <= 0) { //jbe donote
@@ -977,9 +1076,10 @@ void play_line() {
             }
             channel_eff[bp] = (unsigned short)(_eff | (_para << 8));
           }
+          spec_arpeggio(ds,bp);
+          play_line_effects(bp);
         }
       }
-      play_line_effects(bp);
     }
   }
 
