@@ -38,7 +38,7 @@ int main(int argc, const char *argv[]) {
   unsigned char *in2data = (unsigned char *)malloc(in2size);
   fread(in2data,1,in2size,in2);
   fwrite(in2data,1,in2size,out);
-  free(in1data);
+  free(in2data);
 
   fwrite(&in2size,1,4,out);
   char *id = "PLS4";
