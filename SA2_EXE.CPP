@@ -41,7 +41,7 @@ int main(int argc, const char *argv[]) {
   free(in2data);
 
   fwrite(&in2size,1,4,out);
-  char *id = "PLS4";
+  const char *id = "PLS4";
   fwrite(id,1,4,out);
 
   fclose(in1);
